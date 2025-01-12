@@ -53,14 +53,14 @@ class LivenessDetector(faceCascadePath: String, eyeCascadePath: String) {
                 Imgproc.circle(frame, eyeCenter, radius, Scalar(255.0, 0.0, 0.0, 255.0), 3)
 
                 // Calculate EAR
-                val eyeROI = faceROI.submat(eye)
-                val eyePoints = MatOfPoint2f()
-                getEyePoints(eyeROI, eyePoints)
-                val ear = calculateEAR(eyePoints)
-                if (ear < 0.25) { // Threshold for blink detection
-                    blinkDetected = true
-                    break
-                }
+//                val eyeROI = faceROI.submat(eye)
+//                val eyePoints = MatOfPoint2f()
+//                getEyePoints(eyeROI, eyePoints)
+//                val ear = calculateEAR(eyePoints)
+//                if (ear < 0.25) { // Threshold for blink detection
+//                    blinkDetected = true
+//                    break
+//                }
             }
         }
 
