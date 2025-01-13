@@ -11,6 +11,11 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2
 import org.opencv.android.OpenCVLoader
 import org.opencv.core.Mat
+import org.opencv.core.MatOfDouble
+import org.opencv.core.MatOfRect
+import org.opencv.core.Scalar
+import org.opencv.imgproc.Imgproc
+import org.opencv.objdetect.HOGDescriptor
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -22,6 +27,7 @@ class AppCameraActivity : CameraActivity(), CvCameraViewListener2 {
     private var mOpenCvCameraView: CameraBridgeViewBase? = null
     private var mTextResult: TextView? = null
     private var faceDetectedCount: Int = 0
+    private var blinkDetectedCount: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,7 +36,7 @@ class AppCameraActivity : CameraActivity(), CvCameraViewListener2 {
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         // Set up camera view
-        val cameraView : CameraBridgeViewBase = findViewById(R.id.camera_view);
+        val cameraView: CameraBridgeViewBase = findViewById(R.id.camera_view);
 
         if (!OpenCVLoader.initLocal()) {
             Log.e(TAG, "ERROR when init for OpenCV")
@@ -89,10 +95,15 @@ class AppCameraActivity : CameraActivity(), CvCameraViewListener2 {
 
         logToGui("RGBA = $rgbaVal")
 
-        val outFrame = livenessDetector?.detect(rgbaVal) { faceDetected ->
+        val outFrame = livenessDetector?.detect(rgbaVal) { faceDetected, blinkDetected ->
             run {
                 faceDetectedCount += if (faceDetected) 1 else 0
+                blinkDetectedCount += if (blinkDetected) 1 else 0
             }
+        }
+
+        if (outFrame != null) {
+            detectHuman(outFrame)
         }
 
         return outFrame ?: rgbaVal
@@ -102,7 +113,8 @@ class AppCameraActivity : CameraActivity(), CvCameraViewListener2 {
         try {
             // Load face cascade
             val faceCascadeFile = File(cacheDir, "haarcascade_frontalface_default.xml")
-            val faceCascadeInputStream: InputStream = resources.openRawResource(R.raw.haarcascade_frontalface_default)
+            val faceCascadeInputStream: InputStream =
+                resources.openRawResource(R.raw.haarcascade_frontalface_default)
             val faceCascadeOutputStream = FileOutputStream(faceCascadeFile)
             faceCascadeInputStream.copyTo(faceCascadeOutputStream)
             faceCascadeInputStream.close()
@@ -111,7 +123,8 @@ class AppCameraActivity : CameraActivity(), CvCameraViewListener2 {
 
             // Load eye cascade
             val eyeCascadeFile = File(cacheDir, "haarcascade_eye.xml")
-            val eyeCascadeInputStream: InputStream = resources.openRawResource(R.raw.haarcascade_eye)
+            val eyeCascadeInputStream: InputStream =
+                resources.openRawResource(R.raw.haarcascade_eye)
             val eyeCascadeOutputStream = FileOutputStream(eyeCascadeFile)
             eyeCascadeInputStream.copyTo(eyeCascadeOutputStream)
             eyeCascadeInputStream.close()
@@ -120,17 +133,37 @@ class AppCameraActivity : CameraActivity(), CvCameraViewListener2 {
 
             return mapOf("fc" to fc, "ec" to ec)
         } catch (ex: Exception) {
-            logToGui( "Error loading cascade", ex)
+            logToGui("Error loading cascade", ex)
             return mapOf()
         }
     }
 
+    private fun detectHuman(frame: Mat) {
+        /// Convert frame to grayscale
+        val grayFrame = Mat()
+        Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_RGBA2GRAY)
 
+        // Initialize HOG descriptor
+        val hog = HOGDescriptor()
+        hog.setSVMDetector(HOGDescriptor.getDefaultPeopleDetector())
 
-    private fun logToGui(msg: CharSequence = "", ex: Exception? = null){
+        val boxes = MatOfRect()
+        val weights = MatOfDouble()
+
+        // Detect people in the grayscale frame
+        hog.detectMultiScale(grayFrame, boxes, weights)
+
+        // Draw rectangles around detected people
+        for (rect in boxes.toArray()) {
+            Imgproc.rectangle(frame, rect.tl(), rect.br(), Scalar(0.0, 255.0, 255.0), 2)
+        }
+    }
+
+    private fun logToGui(msg: CharSequence = "", ex: Exception? = null) {
         try {
             runOnUiThread {
-                mTextResult?.text = "$msg :: face detected count: $faceDetectedCount"
+                mTextResult?.text =
+                    "$msg :: face detected count: $faceDetectedCount, blink detected count: $blinkDetectedCount"
             }
 
             if (null == ex) {
@@ -143,4 +176,5 @@ class AppCameraActivity : CameraActivity(), CvCameraViewListener2 {
         }
 
     }
+
 }

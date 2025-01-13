@@ -1,30 +1,47 @@
 package tech.nmhillusion.turtlecvlite
 
-import org.opencv.core.MatOfPoint2f
-import org.opencv.core.Point
-import org.opencv.core.Rect
-import org.opencv.core.Scalar
-import org.opencv.core.Size
 import org.opencv.core.Mat
+import org.opencv.core.MatOfPoint2f
 import org.opencv.core.MatOfRect
-import org.opencv.objdetect.CascadeClassifier
+import org.opencv.core.Point
+import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
+import org.opencv.objdetect.CascadeClassifier
 
 class LivenessDetector(faceCascadePath: String, eyeCascadePath: String) {
 
     private val faceCascade = CascadeClassifier(faceCascadePath)
     private val eyeCascade = CascadeClassifier(eyeCascadePath)
+    private val blinkEyeDetector = BlinkEyeDetector()
 
     // Function to calculate Eye Aspect Ratio (EAR)
     private fun calculateEAR(eye: MatOfPoint2f): Double {
         val eyePoints = eye.toArray()
-        val A = Math.sqrt(Math.pow((eyePoints[1].x - eyePoints[5].x), 2.0) + Math.pow((eyePoints[1].y - eyePoints[5].y), 2.0))
-        val B = Math.sqrt(Math.pow((eyePoints[2].x - eyePoints[4].x), 2.0) + Math.pow((eyePoints[2].y - eyePoints[4].y), 2.0))
-        val C = Math.sqrt(Math.pow((eyePoints[0].x - eyePoints[3].x), 2.0) + Math.pow((eyePoints[0].y - eyePoints[3].y), 2.0))
+        val A = Math.sqrt(
+            Math.pow(
+                (eyePoints[1].x - eyePoints[5].x),
+                2.0
+            ) + Math.pow((eyePoints[1].y - eyePoints[5].y), 2.0)
+        )
+        val B = Math.sqrt(
+            Math.pow(
+                (eyePoints[2].x - eyePoints[4].x),
+                2.0
+            ) + Math.pow((eyePoints[2].y - eyePoints[4].y), 2.0)
+        )
+        val C = Math.sqrt(
+            Math.pow(
+                (eyePoints[0].x - eyePoints[3].x),
+                2.0
+            ) + Math.pow((eyePoints[0].y - eyePoints[3].y), 2.0)
+        )
         return (A + B) / (2.0 * C)
     }
 
-    fun detect(frame: Mat, faceDetectedCallback: ((faceDetected: Boolean) -> Unit)?): Mat {
+    fun detect(
+        frame: Mat,
+        faceDetectedCallback: ((faceDetected: Boolean, blinkDetected: Boolean) -> Unit)?
+    ): Mat {
         val grayFrame = Mat()
         Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_RGBA2GRAY)
 
@@ -47,10 +64,12 @@ class LivenessDetector(faceCascadePath: String, eyeCascadePath: String) {
             }
 
             for (eye in eyes.toArray()) {
-                val eyeCenter = Point(face.tl().x + eye.x + eye.width * 0.5,
-                    face.tl().y + eye.y + eye.height * 0.5)
+                val eyeCenter = Point(
+                    face.tl().x + eye.x + eye.width * 0.5,
+                    face.tl().y + eye.y + eye.height * 0.5
+                )
                 val radius = ((eye.width + eye.height) * 0.25).toInt()
-                Imgproc.circle(frame, eyeCenter, radius, Scalar(255.0, 0.0, 0.0, 255.0), 3)
+                Imgproc.circle(frame, eyeCenter, radius, Scalar(255.0, 0.0, 0.0, 255.0), 1)
 
                 // Calculate EAR
 //                val eyeROI = faceROI.submat(eye)
@@ -64,7 +83,11 @@ class LivenessDetector(faceCascadePath: String, eyeCascadePath: String) {
             }
         }
 
-        faceDetectedCallback?.invoke(faceDetected)
+        if (faceDetected) {
+            blinkDetected = blinkEyeDetector.detectBlink(frame)
+        }
+
+        faceDetectedCallback?.invoke(faceDetected, blinkDetected)
 
         return frame
     }
